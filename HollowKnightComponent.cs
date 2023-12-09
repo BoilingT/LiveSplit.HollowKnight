@@ -9,14 +9,16 @@ using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
 using System.Xml;
+using static System.Windows.Forms.AxHost;
+
 namespace LiveSplit.HollowKnight {
 #if !Info
     public class HollowKnightComponent : IComponent {
         public TimerModel Model { get; set; }
 #else
-	public class HollowKnightComponent {
+    public class HollowKnightComponent {
 #endif
-        public string ComponentName { get { return "Hollow Knight Autosplitter"; } }
+        public string ComponentName { get { return "Hollow Knight Autosplitter (Boil)"; } }
         public IDictionary<string, Action> ContextMenuControls { get { return null; } }
         internal static string[] keys = {
             "CurrentSplit",
@@ -105,7 +107,7 @@ namespace LiveSplit.HollowKnight {
 
         }
 #else
-		public HollowKnightComponent() {
+        public HollowKnightComponent() {
         mem = new HollowKnightMemory();
         settings = new HollowKnightSettings();
         foreach (string key in keys) {
@@ -113,7 +115,7 @@ namespace LiveSplit.HollowKnight {
 
         store.ResetKills();
 
-			}
+            }
 #endif
 
         public void GetValues() {
@@ -913,7 +915,7 @@ namespace LiveSplit.HollowKnight {
                     break;
                 case SplitName.EnterJunkPit: shouldSplit = nextScene.Equals("GG_Waterways") && nextScene != sceneName; break;
                 case SplitName.EnterDeepnest:
-                    shouldSplit = 
+                    shouldSplit =
                         (nextScene.Equals("Fungus2_25") ||
                         nextScene.Equals("Deepnest_42") ||
                         nextScene.Equals("Abyss_03b") ||
@@ -1177,10 +1179,11 @@ namespace LiveSplit.HollowKnight {
                 case SplitName.MegaMossChargerTrans: shouldSplit = mem.PlayerData<bool>(Offset.megaMossChargerDefeated) && nextScene != sceneName; break;
                 case SplitName.ElderHuTrans: shouldSplit = mem.PlayerData<bool>(Offset.killedGhostHu) && nextScene != sceneName; break;
                 case SplitName.BlackKnightTrans: shouldSplit = mem.PlayerData<bool>(Offset.killedBlackKnight) && nextScene != sceneName; break;
-                case SplitName.BrokenVesselTrans: shouldSplit = 
-                        mem.PlayerData<bool>(Offset.killedInfectedKnight) && 
+                case SplitName.BrokenVesselTrans:
+                    shouldSplit =
+                        mem.PlayerData<bool>(Offset.killedInfectedKnight) &&
                         mem.PlayerData<int>(Offset.health) > 0 &&
-                        nextScene != sceneName; 
+                        nextScene != sceneName;
                     break;
 
                 case SplitName.GladeIdol: shouldSplit = store.CheckIncreased(Offset.trinket3) && sceneName.StartsWith("RestingGrounds_08"); break;
@@ -1783,12 +1786,18 @@ namespace LiveSplit.HollowKnight {
                 }
                 splitAdvanced = true;
             } else if (action == SplitterAction.Split) {
+
                 if (currentSplit < 0) {
                     Model.Start();
                 } else {
+                    if (!ShouldAutoSplit) return;
                     Model.Split();
                 }
-                splitAdvanced = true;
+                //var State = Model.CurrentState;
+                //Model.CurrentState.Run[State.CurrentSplitIndex - 1].Comparisons["temp"] = new Time();
+                //
+                //Model.CurrentState.Run[State.CurrentSplitIndex - 0].Comparisons["temp"] = new Time(State.CurrentTimingMethod, TimeSpan.FromMinutes(1));
+                //splitAdvanced = true;
             }
 
             if (splitAdvanced) {
@@ -1877,13 +1886,46 @@ namespace LiveSplit.HollowKnight {
 #if !Info
             WriteLog(DateTime.Now.ToString(@"HH\:mm\:ss.fff") + (Model != null && Model.CurrentState.CurrentTime.RealTime.HasValue ? " | " + Model.CurrentState.CurrentTime.RealTime.Value.ToString("G").Substring(3, 11) : "") + ": " + data);
 #else
-			WriteLog(DateTime.Now.ToString(@"HH\:mm\:ss.fff") + ": " + data);
+            WriteLog(DateTime.Now.ToString(@"HH\:mm\:ss.fff") + ": " + data);
 #endif
         }
 
 #if !Info
         public void Update(IInvalidator invalidator, LiveSplitState lvstate, float width, float height, LayoutMode mode) {
             GetValues();
+        }
+
+        private void Print<T>(params T[] data) {
+            string msg = "";
+            for (var i = 0; i < data.Length; i++) {
+                msg += data[i].ToString() + (i >= data.Length ? "" : " ");
+            }
+            MessageBox.Show(msg);
+        }
+
+        private int TotalSkips { get; set; }
+        private bool ShouldAutoSplit { get; set; }
+
+        private int getSkipCount(LiveSplitState splitState) {
+            int amount = 0;
+
+            for (var i = 0; i < splitState.Run.Count; i++) {
+                if (splitState.Run[i].Comparisons["Saved Split Time"][splitState.CurrentTimingMethod].HasValue) {
+                    amount++;
+                }
+            }
+            return amount;
+        }
+
+        private void ClearSavedSplitTimeColumn() {
+            for (var i = 0; i < Model.CurrentState.Run.Count; i++) {
+                Model.CurrentState.Run[i].Comparisons["Saved Split Time"] = new Time();
+            }
+        }
+
+        private void InitiateNewRun() {
+            ClearSavedSplitTimeColumn();
+            Model.CurrentState.Run.Offset = TimeSpan.Zero;
         }
 
         public void OnReset(object sender, TimerPhase e) {
@@ -1907,6 +1949,7 @@ namespace LiveSplit.HollowKnight {
         }
         public void OnPause(object sender, EventArgs e) {
             WriteLog("---------Paused---------------------------------");
+            Model.CurrentState.Run.Offset = Model.CurrentState.TimePausedAt;
         }
         public void OnStart(object sender, EventArgs e) {
             currentSplit = 0;
@@ -1919,15 +1962,43 @@ namespace LiveSplit.HollowKnight {
             store.SplitThisTransition = true;
             store.Update();
             WriteLog("---------New Game-------------------------------");
+
+            TotalSkips = getSkipCount(Model.CurrentState);
+
+            if (Model.CurrentState.Run[0].Comparisons["Saved Split Time"][Model.CurrentState.CurrentTimingMethod] == null) {
+                Model.CurrentState.Run.CustomComparisons.Add("Saved Split Time");
+            }
+
+            if (TotalSkips > 0) {
+                //"Disable" the autosplitter until the skips are done
+                ShouldAutoSplit = false;
+                //Initiate the skipping of the splits
+                Model.SkipSplit();
+            } else {
+                ShouldAutoSplit = true;
+            }
         }
         public void OnUndoSplit(object sender, EventArgs e) {
             currentSplit--;
             //if (!settings.Ordered) splitsDone.Remove(lastSplitDone); Reminder of THIS BREAKS THINGS
             state = 0;
+            ISegment previousSplit = Model.CurrentState.Run[Model.CurrentState.CurrentSplitIndex - 1];
+            previousSplit.Comparisons["Saved Split Time"] = new Time();
         }
         public void OnSkipSplit(object sender, EventArgs e) {
             currentSplit++;
             state = 0;
+            if (TotalSkips > 0) {
+                ISegment previousSplit = Model.CurrentState.Run[Model.CurrentState.CurrentSplitIndex - 1];
+                previousSplit.SplitTime = previousSplit.Comparisons["Saved Split Time"];
+
+                TotalSkips--;
+                if (TotalSkips > 0) {
+                    Model.SkipSplit();
+                } else {
+                    ShouldAutoSplit = true;
+                }
+            }
         }
         public void OnSplit(object sender, EventArgs e) {
             currentSplit++;
@@ -1935,6 +2006,9 @@ namespace LiveSplit.HollowKnight {
             store.Update();
 
             state = 0;
+
+            ISegment previousSplit = Model.CurrentState.Run[Model.CurrentState.CurrentSplitIndex - 1];
+            previousSplit.Comparisons["Saved Split Time"] = previousSplit.SplitTime;
         }
         public Control GetSettingsControl(LayoutMode mode) { return settings; }
         public void SetSettings(XmlNode document) { settings.SetSettings(document); }

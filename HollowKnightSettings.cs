@@ -23,7 +23,7 @@ namespace LiveSplit.HollowKnight {
 #if DEBUG
             version += "-dev";
 #endif
-            this.versionLabel.Text = "Autosplitter Version: " + version;
+            this.versionLabel.Text = "(Boil) Autosplitter Version: " + version;
 
             Splits = new List<SplitName>();
             isLoading = false;
@@ -299,8 +299,7 @@ namespace LiveSplit.HollowKnight {
             if (chkAutosplitStartRuns.Checked) {
                 cboStartTriggerName.Enabled = true;
                 cboStartTriggerName.DataSource = GetAvailableSplits();
-            }
-            else {
+            } else {
                 cboStartTriggerName.Text = "";
                 cboStartTriggerName.Enabled = false;
                 cboStartTriggerName.DataSource = new List<string>();
