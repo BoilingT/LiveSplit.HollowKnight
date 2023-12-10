@@ -1965,7 +1965,7 @@ namespace LiveSplit.HollowKnight {
 
             TotalSkips = getSkipCount(Model.CurrentState);
 
-            if (Model.CurrentState.Run[0].Comparisons["Saved Split Time"][Model.CurrentState.CurrentTimingMethod] == null) {
+            if (Model.CurrentState.Run.CustomComparisons.Contains("Saved Split Time") == false) {
                 Model.CurrentState.Run.CustomComparisons.Add("Saved Split Time");
             }
 
