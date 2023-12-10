@@ -1793,11 +1793,6 @@ namespace LiveSplit.HollowKnight {
                     if (!ShouldAutoSplit) return;
                     Model.Split();
                 }
-                //var State = Model.CurrentState;
-                //Model.CurrentState.Run[State.CurrentSplitIndex - 1].Comparisons["temp"] = new Time();
-                //
-                //Model.CurrentState.Run[State.CurrentSplitIndex - 0].Comparisons["temp"] = new Time(State.CurrentTimingMethod, TimeSpan.FromMinutes(1));
-                //splitAdvanced = true;
             }
 
             if (splitAdvanced) {
